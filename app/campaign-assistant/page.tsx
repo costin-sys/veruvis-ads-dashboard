@@ -1,0 +1,1 @@
+Create file app/campaign-assistant/page.tsx with a basic 5-tab layout for campaign assistant

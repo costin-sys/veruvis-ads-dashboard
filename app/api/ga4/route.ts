@@ -33,17 +33,18 @@ function initializeClient() {
 async function runReport(
   metrics: Array<{ name: string }>,
   dimensions: Array<{ name: string }> = [],
-  limit: number = 10000
+  limit: number = 10000,
+  days: number = 30
 ) {
   const analyticsClient = initializeClient();
   const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const daysAgo = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
   const request = {
     property: `properties/${propertyId}`,
     dateRanges: [
       {
-        startDate: thirtyDaysAgo.toISOString().split('T')[0],
+        startDate: daysAgo.toISOString().split('T')[0],
         endDate: now.toISOString().split('T')[0],
       },
     ],
@@ -58,36 +59,39 @@ async function runReport(
   return response;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    console.log('GA4 API called - propertyId:', propertyId);
+    const url = new URL(request.url);
+    const days = parseInt(url.searchParams.get('days') || '30');
+
+    console.log('GA4 API called - propertyId:', propertyId, '- days:', days);
 
     // Key metrics
     console.log('Fetching sessions...');
-    const sessionsReport = await runReport([{ name: 'sessions' }]);
+    const sessionsReport = await runReport([{ name: 'sessions' }], [], 10000, days);
     const sessions =
       sessionsReport[0]?.rows?.[0]?.metricValues?.[0]?.value || '0';
     console.log('Sessions:', sessions);
 
     console.log('Fetching users...');
-    const usersReport = await runReport([{ name: 'activeUsers' }]);
+    const usersReport = await runReport([{ name: 'activeUsers' }], [], 10000, days);
     const users = usersReport[0]?.rows?.[0]?.metricValues?.[0]?.value || '0';
     console.log('Users:', users);
 
     console.log('Fetching pageviews...');
-    const pageviewsReport = await runReport([{ name: 'screenPageViews' }]);
+    const pageviewsReport = await runReport([{ name: 'screenPageViews' }], [], 10000, days);
     const pageviews =
       pageviewsReport[0]?.rows?.[0]?.metricValues?.[0]?.value || '0';
     console.log('Pageviews:', pageviews);
 
     console.log('Fetching bounce rate...');
-    const bounceRateReport = await runReport([{ name: 'bounceRate' }]);
+    const bounceRateReport = await runReport([{ name: 'bounceRate' }], [], 10000, days);
     const bounceRate =
       parseFloat(bounceRateReport[0]?.rows?.[0]?.metricValues?.[0]?.value || '0').toFixed(2);
     console.log('Bounce rate:', bounceRate);
 
     console.log('Fetching session duration...');
-    const sessionDurationReport = await runReport([{ name: 'averageSessionDuration' }]);
+    const sessionDurationReport = await runReport([{ name: 'averageSessionDuration' }], [], 10000, days);
     const avgSessionDuration = parseFloat(
       sessionDurationReport[0]?.rows?.[0]?.metricValues?.[0]?.value || '0'
     ).toFixed(2);
@@ -98,7 +102,8 @@ export async function GET() {
     const topPagesReport = await runReport(
       [{ name: 'screenPageViews' }],
       [{ name: 'pagePath' }],
-      10
+      10,
+      days
     );
     const topPages = (topPagesReport[0]?.rows || [])
       .slice(0, 10)
@@ -113,7 +118,8 @@ export async function GET() {
     const dailyReport = await runReport(
       [{ name: 'sessions' }],
       [{ name: 'date' }],
-      31
+      days > 30 ? days : 31,
+      days
     );
     const dailyData = (dailyReport[0]?.rows || [])
       .map((row: any) => {
@@ -123,7 +129,7 @@ export async function GET() {
           sessions: parseInt(row.metricValues[0].value),
         };
       })
-      .slice(0, 30);
+      .slice(0, days);
     console.log('Daily data points:', dailyData.length);
 
     // Traffic sources
@@ -131,7 +137,8 @@ export async function GET() {
     const trafficReport = await runReport(
       [{ name: 'sessions' }],
       [{ name: 'sessionSource' }],
-      100
+      100,
+      days
     );
     const trafficData = (trafficReport[0]?.rows || [])
       .map((row: any) => ({
@@ -146,7 +153,9 @@ export async function GET() {
     console.log('Fetching device data...');
     const deviceReport = await runReport(
       [{ name: 'sessions' }],
-      [{ name: 'deviceCategory' }]
+      [{ name: 'deviceCategory' }],
+      10000,
+      days
     );
     const deviceData = (deviceReport[0]?.rows || []).map((row: any) => ({
       name: row.dimensionValues[0].value,
@@ -159,7 +168,8 @@ export async function GET() {
     const countriesReport = await runReport(
       [{ name: 'sessions' }],
       [{ name: 'country' }],
-      100
+      100,
+      days
     );
     const countriesData = (countriesReport[0]?.rows || [])
       .map((row: any) => ({
@@ -175,7 +185,8 @@ export async function GET() {
     const landingPagesReport = await runReport(
       [{ name: 'sessions' }],
       [{ name: 'pageTitle' }],
-      100
+      100,
+      days
     );
     const landingPages = (landingPagesReport[0]?.rows || [])
       .map((row: any) => ({
@@ -190,7 +201,8 @@ export async function GET() {
     const exitPagesReport = await runReport(
       [{ name: 'sessions' }],
       [{ name: 'pageTitle' }],
-      100
+      100,
+      days
     );
     const exitPages = (exitPagesReport[0]?.rows || [])
       .map((row: any) => ({
@@ -205,7 +217,8 @@ export async function GET() {
     const eventsReport = await runReport(
       [{ name: 'eventCount' }],
       [{ name: 'eventName' }],
-      100
+      100,
+      days
     );
     const events = (eventsReport[0]?.rows || [])
       .map((row: any) => ({

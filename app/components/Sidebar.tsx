@@ -1,0 +1,63 @@
+'use client';
+
+import { useState } from 'react';
+import { BarChart3, TrendingUp, Zap, ChevronDown } from 'lucide-react';
+
+interface SidebarProps {
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+}
+
+export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+  const navItems = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'ga4', label: 'GA4 Analytics', icon: TrendingUp },
+    { id: 'meta', label: 'Meta Ads', icon: Zap },
+  ];
+
+  return (
+    <aside className="fixed left-0 top-0 h-screen w-60 bg-gradient-to-b from-slate-900 to-slate-800 text-white p-6 shadow-2xl z-50">
+      {/* Logo */}
+      <div className="mb-12 flex items-center gap-3">
+        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center font-bold text-lg">
+          V
+        </div>
+        <div>
+          <h1 className="text-xl font-bold">VERUVIS</h1>
+          <p className="text-xs text-slate-400">Analytics</p>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="space-y-2">
+        {navItems.map((item) => {
+          const IconComponent = item.icon;
+          const isActive = activeTab === item.id;
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => onTabChange(item.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+              }`}
+            >
+              <IconComponent className="h-5 w-5" />
+              <span className="font-medium">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="absolute bottom-6 left-6 right-6">
+        <div className="rounded-lg bg-blue-600/20 border border-blue-500/30 p-4">
+          <p className="text-xs text-slate-300 mb-2">Last Updated</p>
+          <p className="text-sm font-semibold text-white">Today</p>
+        </div>
+      </div>
+    </aside>
+  );
+}

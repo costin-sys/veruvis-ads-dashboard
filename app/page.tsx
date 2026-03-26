@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { Header } from './components/Header';
+import { MetricCard } from './components/MetricCard';
 import {
   LineChart,
   Line,
@@ -13,9 +16,21 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
+import {
+  Users,
+  TrendingUp,
+  Eye,
+  MousePointerClick,
+  Zap,
+  Globe,
+  BarChart3,
+  ShoppingCart,
+  DollarSign,
+  Activity,
+  Sparkles,
+} from 'lucide-react';
 
 interface GA4Data {
   sessions: number;
@@ -33,415 +48,481 @@ interface GA4Data {
   events: Array<{ event: string; count: number }>;
 }
 
+interface MetaData {
+  totalSpend: number;
+  totalImpressions: number;
+  totalClicks: number;
+  averageCtr: number;
+  activeCampaigns: number;
+  topCampaigns: Array<{
+    name: string;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    ctr: string;
+  }>;
+  dateRange: {
+    from: string;
+    to: string;
+  };
+}
+
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [days, setDays] = useState(30);
   const [data, setData] = useState<GA4Data | null>(null);
+  const [metaData, setMetaData] = useState<MetaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [metaError, setMetaError] = useState<string | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [agencyGuide, setAgencyGuide] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/ga4')
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          setData(json.data);
+    const fetchAllData = async () => {
+      setLoading(true);
+      try {
+        // Fetch GA4 data
+        const ga4Response = await fetch(`/api/ga4?days=${days}`);
+        const ga4Json = await ga4Response.json();
+        if (ga4Json.success) {
+          setData(ga4Json.data);
         } else {
-          setError(json.error || 'Failed to load GA4 data');
+          setError(ga4Json.error || 'Failed to load GA4 data');
         }
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+
+        // Fetch Meta data
+        const metaResponse = await fetch(`/api/meta?days=${days}`);
+        const metaJson = await metaResponse.json();
+        if (metaJson.success) {
+          setMetaData(metaJson.data);
+        } else {
+          setMetaError(metaJson.error || 'Failed to load Meta Ads data');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllData();
+  }, [days]);
+
+  const handleAnalyze = async () => {
+    console.log('Handle analyze called');
+    console.log('Data available:', { data, metaData });
+
+    if (!data || !metaData) {
+      console.error('Missing data or metaData:', { data, metaData });
+      setError('Data not loaded yet. Please wait for GA4 and Meta Ads data to load.');
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        ga4Data: {
+          sessions: data.sessions,
+          users: data.users,
+          pageviews: data.pageviews,
+          bounceRate: data.bounceRate,
+          avgSessionDuration: data.avgSessionDuration,
+          topPages: data.topPages,
+        },
+        metaData: {
+          totalSpend: metaData.totalSpend,
+          totalImpressions: metaData.totalImpressions,
+          totalClicks: metaData.totalClicks,
+          averageCtr: metaData.averageCtr,
+          activeCampaigns: metaData.activeCampaigns,
+          topCampaigns: metaData.topCampaigns,
+        },
+      };
+
+      console.log('Sending payload to /api/analyze:', payload);
+
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Response status:', response.status);
+      const result = await response.json();
+      console.log('Response result:', result);
+
+      if (response.ok && result.success) {
+        console.log('Analysis successful');
+        setAnalysis(result.analysis);
+        setAgencyGuide(result.agencyGuide);
+      } else {
+        const errorMsg = result.error || `API returned status ${response.status}`;
+        console.error('Analysis failed:', errorMsg);
+        setError(errorMsg);
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to generate analysis';
+      console.error('Catch error:', err);
+      setError(errorMsg);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case 'ga4':
+        return 'GA4 Analytics';
+      case 'meta':
+        return 'Meta Ads Performance';
+      default:
+        return 'Dashboard Overview';
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
-            GA4 Analytics Dashboard
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400">
-            Last 30 days performance metrics
-          </p>
-        </div>
+    <div className="flex h-screen bg-slate-100">
+      {/* Sidebar */}
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {loading && (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-slate-600 dark:text-slate-400">
-              Loading analytics data...
-            </p>
-          </div>
-        )}
+      {/* Main Content */}
+      <div className="ml-60 flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <Header title={getTabTitle()} days={days} onDaysChange={setDays} />
 
-        {error && (
-          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 text-red-800 dark:text-red-200">
-            <p className="font-semibold">Error loading GA4 data</p>
-            <p className="text-sm mt-1">{error}</p>
-          </div>
-        )}
-
-        {data && (
-          <>
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-              <MetricCard
-                label="Sessions"
-                value={data.sessions}
-                color="border-blue-500"
-              />
-              <MetricCard
-                label="Users"
-                value={data.users}
-                color="border-green-500"
-              />
-              <MetricCard
-                label="Pageviews"
-                value={data.pageviews}
-                color="border-purple-500"
-              />
-              <MetricCard
-                label="Bounce Rate"
-                value={`${data.bounceRate}%`}
-                color="border-orange-500"
-              />
-              <MetricCard
-                label="Avg Session"
-                value={`${data.avgSessionDuration}s`}
-                color="border-red-500"
-              />
-            </div>
-
-            {/* Daily Sessions Chart */}
-            <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6 mb-8">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                Daily Sessions (Last 30 Days)
-              </h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={data.dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="date" stroke="#64748b" />
-                  <YAxis stroke="#64748b" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e293b',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#f1f5f9',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="sessions"
-                    stroke="#3b82f6"
-                    dot={false}
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Traffic Sources and Devices */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              {/* Traffic Sources */}
-              <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                  Traffic Sources
-                </h2>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={data.trafficData}
-                      dataKey="sessions"
-                      nameKey="source"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label
-                    >
-                      {data.trafficData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1e293b',
-                        border: 'none',
-                        borderRadius: '8px',
-                        color: '#f1f5f9',
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="mt-4 space-y-2">
-                  {data.trafficData.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">
-                        <span
-                          className="inline-block w-3 h-3 rounded-full mr-2"
-                          style={{
-                            backgroundColor:
-                              COLORS[idx % COLORS.length],
-                          }}
-                        ></span>
-                        {item.source}
-                      </span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {item.sessions}
-                      </span>
-                    </div>
-                  ))}
+        {/* Content */}
+        <main className="flex-1 overflow-auto bg-slate-50 p-8">
+          <div className="max-w-7xl mx-auto">
+            {loading ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                  <p className="text-slate-600">Loading analytics data...</p>
                 </div>
               </div>
+            ) : (
+              <>
+                {/* Analysis Button and Report */}
+                {data && metaData && (
+                  <>
+                    {/* Error Alert */}
+                    {error && (
+                      <div className="mb-8 bg-red-50 border border-red-300 rounded-lg p-4 text-red-800">
+                        <div className="flex items-start gap-3">
+                          <div className="text-red-500 font-bold">⚠️</div>
+                          <div>
+                            <h4 className="font-semibold">Error</h4>
+                            <p className="text-sm">{error}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-              {/* Device Category */}
-              <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                  Device Breakdown
-                </h2>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={data.deviceData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                    >
-                      {data.deviceData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1e293b',
-                        border: 'none',
-                        borderRadius: '8px',
-                        color: '#f1f5f9',
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="mt-4 space-y-2">
-                  {data.deviceData.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">
-                        <span
-                          className="inline-block w-3 h-3 rounded-full mr-2"
-                          style={{
-                            backgroundColor:
-                              COLORS[idx % COLORS.length],
-                          }}
-                        ></span>
-                        {item.name}
-                      </span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {item.value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Top Countries */}
-            <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6 mb-8">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                Top 5 Countries
-              </h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data.countriesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="country" stroke="#64748b" />
-                  <YAxis stroke="#64748b" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e293b',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#f1f5f9',
-                    }}
-                  />
-                  <Bar dataKey="sessions" fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Landing and Exit Pages */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              {/* Landing Pages */}
-              <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                  Top 5 Landing Pages
-                </h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700">
-                        <th className="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                          Page
-                        </th>
-                        <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                          Sessions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.landingPages.map((page, idx) => (
-                        <tr
-                          key={idx}
-                          className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                        >
-                          <td className="py-3 px-4 text-slate-900 dark:text-slate-100 truncate text-xs">
-                            {page.page}
-                          </td>
-                          <td className="text-right py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
-                            {parseInt(page.sessions).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Exit Pages */}
-              <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                  Top 5 Exit Pages
-                </h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700">
-                        <th className="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                          Page
-                        </th>
-                        <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                          Sessions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.exitPages.map((page, idx) => (
-                        <tr
-                          key={idx}
-                          className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                        >
-                          <td className="py-3 px-4 text-slate-900 dark:text-slate-100 truncate text-xs">
-                            {page.page}
-                          </td>
-                          <td className="text-right py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
-                            {parseInt(page.sessions).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* Top Events */}
-            <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6 mb-8">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                Top 10 Events
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                        Event
-                      </th>
-                      <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                        Triggers
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.events.map((event, idx) => (
-                      <tr
-                        key={idx}
-                        className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                    <div className="mb-8 flex justify-end">
+                      <button
+                        onClick={handleAnalyze}
+                        disabled={analysisLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                       >
-                        <td className="py-3 px-4 text-slate-900 dark:text-slate-100 truncate">
-                          {event.event}
-                        </td>
-                        <td className="text-right py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
-                          {event.count.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                        {analysisLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            Claude analizează datele...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-5 w-5" />
+                            Analizează datele cu AI
+                          </>
+                        )}
+                      </button>
+                    </div>
 
-            {/* Top Pages */}
-            <div className="rounded-lg bg-white dark:bg-slate-800 shadow-md p-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                Top Pages
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                        Page
-                      </th>
-                      <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                        Views
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.topPages.map((page, idx) => (
-                      <tr
-                        key={idx}
-                        className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                      >
-                        <td className="py-3 px-4 text-slate-900 dark:text-slate-100 truncate">
-                          {page.page}
-                        </td>
-                        <td className="text-right py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
-                          {parseInt(page.views).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        )}
+                    {/* Analysis Report */}
+                    {analysis && (
+                      <div className="mb-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-8 border border-blue-200 shadow-lg">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4">📊 Analiza datelor</h3>
+                        <div className="prose prose-sm max-w-none text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
+                          {analysis}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Agency Guide Report */}
+                    {agencyGuide && (
+                      <div className="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-8 border border-amber-300 shadow-lg">
+                        <h3 className="text-lg font-bold text-amber-900 mb-4">📋 Ce să ceri agenției</h3>
+                        <div className="prose prose-sm max-w-none text-amber-900 whitespace-pre-wrap font-sans leading-relaxed">
+                          {agencyGuide}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Overview Tab */}
+                {activeTab === 'overview' && data && metaData && (
+                  <div className="space-y-8">
+                    {/* GA4 Quick Metrics */}
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900 mb-4">Website Analytics (GA4)</h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <MetricCard
+                          icon={Users}
+                          label="Sessions"
+                          value={data.sessions}
+                          color="blue"
+                        />
+                        <MetricCard
+                          icon={TrendingUp}
+                          label="Users"
+                          value={data.users}
+                          color="green"
+                        />
+                        <MetricCard
+                          icon={Eye}
+                          label="Pageviews"
+                          value={data.pageviews}
+                          color="purple"
+                        />
+                        <MetricCard
+                          icon={Activity}
+                          label="Bounce Rate"
+                          value={`${data.bounceRate}%`}
+                          color="orange"
+                        />
+                        <MetricCard
+                          icon={Zap}
+                          label="Avg Session"
+                          value={`${data.avgSessionDuration}s`}
+                          color="red"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Meta Quick Metrics */}
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900 mb-4">Ads Performance (Meta)</h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <MetricCard
+                          icon={DollarSign}
+                          label="Total Spend"
+                          value={`$${metaData.totalSpend.toFixed(2)}`}
+                          color="pink"
+                        />
+                        <MetricCard
+                          icon={Eye}
+                          label="Impressions"
+                          value={metaData.totalImpressions.toLocaleString()}
+                          color="cyan"
+                        />
+                        <MetricCard
+                          icon={MousePointerClick}
+                          label="Clicks"
+                          value={metaData.totalClicks.toLocaleString()}
+                          color="indigo"
+                        />
+                        <MetricCard
+                          icon={BarChart3}
+                          label="Avg CTR"
+                          value={`${metaData.averageCtr.toFixed(2)}%`}
+                          color="lime"
+                        />
+                        <MetricCard
+                          icon={ShoppingCart}
+                          label="Active Campaigns"
+                          value={metaData.activeCampaigns}
+                          color="rose"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Charts Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Daily Sessions */}
+                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4">Daily Sessions</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <LineChart data={data.dailyData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="date" stroke="#64748b" style={{ fontSize: '12px' }} />
+                            <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#1e293b',
+                                border: 'none',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="sessions"
+                              stroke="#3b82f6"
+                              dot={false}
+                              strokeWidth={2}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Traffic Sources */}
+                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4">Traffic Sources</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={data.trafficData}
+                              dataKey="sessions"
+                              nameKey="source"
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={80}
+                              label
+                            >
+                              {data.trafficData.map((_, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#1e293b',
+                                border: 'none',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* GA4 Analytics Tab */}
+                {activeTab === 'ga4' && data && (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Top Pages */}
+                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4">Top Pages</h3>
+                        <div className="space-y-3">
+                          {data.topPages.slice(0, 5).map((page, idx) => (
+                            <div key={idx} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-b-0">
+                              <p className="text-sm text-slate-700 truncate">{page.page}</p>
+                              <p className="text-sm font-semibold text-slate-900">{parseInt(page.views).toLocaleString()}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Top Countries */}
+                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4">Top Countries</h3>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart data={data.countriesData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="country" stroke="#64748b" style={{ fontSize: '12px' }} />
+                            <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#1e293b',
+                                border: 'none',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                            />
+                            <Bar dataKey="sessions" fill="#3b82f6" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Events Table */}
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                      <h3 className="text-lg font-bold text-slate-900 mb-4">Top 10 Events</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="text-left py-3 px-4 font-semibold text-slate-700">Event</th>
+                              <th className="text-right py-3 px-4 font-semibold text-slate-700">Triggers</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {data.events.map((event, idx) => (
+                              <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="py-3 px-4 text-slate-900">{event.event}</td>
+                                <td className="text-right py-3 px-4 font-medium text-slate-900">{event.count.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Meta Ads Tab */}
+                {activeTab === 'meta' && metaData && (
+                  <div className="space-y-8">
+                    {/* Top Campaigns */}
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                      <h3 className="text-lg font-bold text-slate-900 mb-4">Top Campaigns</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="text-left py-3 px-4 font-semibold text-slate-700">Campaign</th>
+                              <th className="text-right py-3 px-4 font-semibold text-slate-700">Spend</th>
+                              <th className="text-right py-3 px-4 font-semibold text-slate-700">Impressions</th>
+                              <th className="text-right py-3 px-4 font-semibold text-slate-700">Clicks</th>
+                              <th className="text-right py-3 px-4 font-semibold text-slate-700">CTR</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {metaData.topCampaigns.map((campaign, idx) => (
+                              <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="py-3 px-4 text-slate-900 font-medium">{campaign.name}</td>
+                                <td className="text-right py-3 px-4 text-slate-900">${campaign.spend.toFixed(2)}</td>
+                                <td className="text-right py-3 px-4 text-slate-900">{campaign.impressions.toLocaleString()}</td>
+                                <td className="text-right py-3 px-4 text-slate-900">{campaign.clicks.toLocaleString()}</td>
+                                <td className="text-right py-3 px-4 font-medium text-slate-900">{campaign.ctr}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {error && activeTab === 'ga4' && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">
+                    <p className="font-semibold">Error loading GA4 data</p>
+                    <p className="text-sm mt-1">{error}</p>
+                  </div>
+                )}
+
+                {metaError && activeTab === 'meta' && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-yellow-800">
+                    <p className="font-semibold">Could not load Meta Ads data</p>
+                    <p className="text-sm mt-1">{metaError}</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </main>
       </div>
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string | number;
-  color: string;
-}) {
-  return (
-    <div
-      className={`rounded-lg bg-white dark:bg-slate-800 shadow-md p-6 border-l-4 ${color}`}
-    >
-      <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
-        {label}
-      </p>
-      <p className="text-2xl font-bold text-slate-900 dark:text-white">
-        {typeof value === 'number' ? value.toLocaleString() : value}
-      </p>
     </div>
   );
 }

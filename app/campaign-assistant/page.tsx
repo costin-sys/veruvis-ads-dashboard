@@ -1,1 +1,1 @@
-Create file app/campaign-assistant/page.tsx with a basic 5-tab layout for campaign assistant
+'use client'; export default function CampaignAssistant() { return <div><h1>Campaign Assistant</h1></div>; }

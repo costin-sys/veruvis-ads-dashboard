@@ -30,6 +30,7 @@ import {
   DollarSign,
   Activity,
   Sparkles,
+  FileText,
 } from 'lucide-react';
 
 interface GA4Data {
@@ -67,6 +68,19 @@ interface MetaData {
   };
 }
 
+interface FinancialData {
+  totalRevenue: number;
+  unpaidAmount: number;
+  invoiceCount: number;
+  invoicesPaid: number;
+  invoicesUnpaid: number;
+  averageInvoiceValue: number;
+  dateRange: {
+    from: string;
+    to: string;
+  };
+}
+
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function Home() {
@@ -74,9 +88,11 @@ export default function Home() {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<GA4Data | null>(null);
   const [metaData, setMetaData] = useState<MetaData | null>(null);
+  const [financialData, setFinancialData] = useState<FinancialData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
+  const [financialError, setFinancialError] = useState<string | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [agencyGuide, setAgencyGuide] = useState<string | null>(null);
@@ -101,6 +117,15 @@ export default function Home() {
           setMetaData(metaJson.data);
         } else {
           setMetaError(metaJson.error || 'Failed to load Meta Ads data');
+        }
+
+        // Fetch Financial data
+        const financialResponse = await fetch(`/api/smartbill?days=${days}`);
+        const financialJson = await financialResponse.json();
+        if (financialJson.success) {
+          setFinancialData(financialJson.data);
+        } else {
+          setFinancialError(financialJson.error || 'Failed to load financial data');
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -183,6 +208,8 @@ export default function Home() {
         return 'GA4 Analytics';
       case 'meta':
         return 'Meta Ads Performance';
+      case 'financial':
+        return 'Date Financiare';
       default:
         return 'Dashboard Overview';
     }
@@ -345,6 +372,59 @@ export default function Home() {
                       </div>
                     </div>
 
+                    {/* Financial Data */}
+                    {financialData && (
+                      <div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-4">
+                          💰 Date Financiare (SmartBill)
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                          <MetricCard
+                            icon={DollarSign}
+                            label="Venituri"
+                            value={`${financialData.totalRevenue.toFixed(2)} RON`}
+                            color="green"
+                          />
+                          <MetricCard
+                            icon={FileText}
+                            label="Creanțe"
+                            value={`${financialData.unpaidAmount.toFixed(2)} RON`}
+                            color="orange"
+                          />
+                          <MetricCard
+                            icon={FileText}
+                            label="Total Facturi"
+                            value={financialData.invoiceCount}
+                            color="blue"
+                          />
+                          <MetricCard
+                            icon={BarChart3}
+                            label="Incasate"
+                            value={financialData.invoicesPaid}
+                            color="lime"
+                          />
+                          <MetricCard
+                            icon={Activity}
+                            label="Neîncasate"
+                            value={financialData.invoicesUnpaid}
+                            color="red"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {financialError && (
+                      <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 text-yellow-800">
+                        <div className="flex items-start gap-3">
+                          <div className="text-yellow-500 font-bold">⚠️</div>
+                          <div>
+                            <h4 className="font-semibold">Financial Data</h4>
+                            <p className="text-sm">{financialError}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Charts Row */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                       {/* Daily Sessions */}
@@ -505,6 +585,111 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Financial Data Tab */}
+                {activeTab === 'financial' && financialData && (
+                  <div className="space-y-8">
+                    {/* Financial Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                      <MetricCard
+                        icon={DollarSign}
+                        label="Venituri"
+                        value={`${financialData.totalRevenue.toFixed(2)} RON`}
+                        color="green"
+                      />
+                      <MetricCard
+                        icon={FileText}
+                        label="Creanțe"
+                        value={`${financialData.unpaidAmount.toFixed(2)} RON`}
+                        color="orange"
+                      />
+                      <MetricCard
+                        icon={FileText}
+                        label="Total Facturi"
+                        value={financialData.invoiceCount}
+                        color="blue"
+                      />
+                      <MetricCard
+                        icon={BarChart3}
+                        label="Incasate"
+                        value={financialData.invoicesPaid}
+                        color="lime"
+                      />
+                      <MetricCard
+                        icon={Activity}
+                        label="Neîncasate"
+                        value={financialData.invoicesUnpaid}
+                        color="red"
+                      />
+                    </div>
+
+                    {/* Financial Details */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Revenue Summary */}
+                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-6">Rezumat Venituri</h3>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                            <span className="text-slate-600">Venituri Incasate:</span>
+                            <span className="text-2xl font-bold text-green-600">
+                              {financialData.totalRevenue.toFixed(2)} RON
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                            <span className="text-slate-600">Creanțe (Neîncasate):</span>
+                            <span className="text-2xl font-bold text-orange-600">
+                              {financialData.unpaidAmount.toFixed(2)} RON
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-600">Total Potențial:</span>
+                            <span className="text-2xl font-bold text-blue-600">
+                              {(financialData.totalRevenue + financialData.unpaidAmount).toFixed(2)} RON
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Invoice Statistics */}
+                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-6">Statistici Facturi</h3>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                            <span className="text-slate-600">Total Facturi:</span>
+                            <span className="text-2xl font-bold text-slate-900">
+                              {financialData.invoiceCount}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                            <span className="text-slate-600">Facturi Incasate:</span>
+                            <span className="text-2xl font-bold text-green-600">
+                              {financialData.invoicesPaid}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-600">Facturi În Așteptare:</span>
+                            <span className="text-2xl font-bold text-orange-600">
+                              {financialData.invoicesUnpaid}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Average Invoice */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                      <div className="text-center">
+                        <p className="text-slate-600 font-semibold mb-2">Valoare Medie pe Factură</p>
+                        <p className="text-5xl font-bold text-blue-600">
+                          {financialData.averageInvoiceValue.toFixed(2)} RON
+                        </p>
+                        <p className="text-sm text-slate-600 mt-2">
+                          Pentru perioada: {financialData.dateRange.from} - {financialData.dateRange.to}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {error && activeTab === 'ga4' && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">
                     <p className="font-semibold">Error loading GA4 data</p>
@@ -516,6 +701,13 @@ export default function Home() {
                   <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-yellow-800">
                     <p className="font-semibold">Could not load Meta Ads data</p>
                     <p className="text-sm mt-1">{metaError}</p>
+                  </div>
+                )}
+
+                {financialError && activeTab === 'financial' && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-yellow-800">
+                    <p className="font-semibold">Could not load Financial data</p>
+                    <p className="text-sm mt-1">{financialError}</p>
                   </div>
                 )}
               </>

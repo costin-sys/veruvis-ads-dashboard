@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, TrendingUp, Zap, Brain } from 'lucide-react';
+import { BarChart3, TrendingUp, Zap, Brain, DollarSign } from 'lucide-react';
 import Link from 'next/link';
 
 interface SidebarProps {
@@ -13,6 +13,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'ga4', label: 'GA4 Analytics', icon: TrendingUp },
     { id: 'meta', label: 'Meta Ads', icon: Zap },
+    { id: 'financial', label: 'Date Financiare', icon: DollarSign },
   ];
 
   const assistantItems = [

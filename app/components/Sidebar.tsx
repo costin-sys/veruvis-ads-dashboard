@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { BarChart3, TrendingUp, Zap, ChevronDown } from 'lucide-react';
+import { BarChart3, TrendingUp, Zap, Brain } from 'lucide-react';
+import Link from 'next/link';
 
 interface SidebarProps {
   activeTab: string;
@@ -13,6 +13,10 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'ga4', label: 'GA4 Analytics', icon: TrendingUp },
     { id: 'meta', label: 'Meta Ads', icon: Zap },
+  ];
+
+  const assistantItems = [
+    { id: 'campaign-assistant', label: 'Asistent Campanii', icon: Brain, href: '/campaign-assistant' },
   ];
 
   return (
@@ -47,6 +51,34 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
               <IconComponent className="h-5 w-5" />
               <span className="font-medium">{item.label}</span>
             </button>
+          );
+        })}
+
+        {/* Divider */}
+        <div className="h-px bg-slate-700 my-4"></div>
+
+        {/* Assistant Section */}
+        <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold px-4 py-2">
+          Asistent
+        </div>
+        {assistantItems.map((item) => {
+          const IconComponent = item.icon;
+          const isActive = activeTab === item.id;
+
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                isActive
+                  ? 'bg-purple-600 text-white shadow-lg'
+                  : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+              }`}
+              onClick={() => onTabChange(item.id)}
+            >
+              <IconComponent className="h-5 w-5" />
+              <span className="font-medium">{item.label}</span>
+            </Link>
           );
         })}
       </nav>

@@ -70,11 +70,18 @@ interface MetaData {
 
 interface FinancialData {
   totalRevenue: number;
-  unpaidAmount: number;
-  invoiceCount: number;
-  invoicesPaid: number;
-  invoicesUnpaid: number;
-  averageInvoiceValue: number;
+  totalUnpaidAmount: number;
+  totalInvoiceCount: number;
+  companies: Array<{
+    cif: string;
+    companyName: string;
+    totalRevenue: number;
+    invoiceCount: number;
+    unpaidAmount: number;
+    invoicesPaid: number;
+    invoicesUnpaid: number;
+    averageInvoiceValue: number;
+  }>;
   dateRange: {
     from: string;
     to: string;
@@ -96,6 +103,13 @@ export default function Home() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [agencyGuide, setAgencyGuide] = useState<string | null>(null);
+
+  const formatRON = (value: any) => {
+    if (typeof value === 'number') {
+      return `${value.toFixed(2)} RON`;
+    }
+    return '';
+  };
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -376,38 +390,38 @@ export default function Home() {
                     {financialData && (
                       <div>
                         <h2 className="text-xl font-bold text-slate-900 mb-4">
-                          💰 Date Financiare (SmartBill)
+                          💰 Date Financiare Consolidate (SmartBill)
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                           <MetricCard
                             icon={DollarSign}
-                            label="Venituri"
+                            label="Total Venituri"
                             value={`${financialData.totalRevenue.toFixed(2)} RON`}
                             color="green"
                           />
                           <MetricCard
                             icon={FileText}
-                            label="Creanțe"
-                            value={`${financialData.unpaidAmount.toFixed(2)} RON`}
+                            label="Total Creanțe"
+                            value={`${financialData.totalUnpaidAmount.toFixed(2)} RON`}
                             color="orange"
                           />
                           <MetricCard
                             icon={FileText}
                             label="Total Facturi"
-                            value={financialData.invoiceCount}
+                            value={financialData.totalInvoiceCount}
                             color="blue"
                           />
                           <MetricCard
                             icon={BarChart3}
-                            label="Incasate"
-                            value={financialData.invoicesPaid}
-                            color="lime"
+                            label="3 Firme"
+                            value={financialData.companies.length}
+                            color="purple"
                           />
                           <MetricCard
                             icon={Activity}
-                            label="Neîncasate"
-                            value={financialData.invoicesUnpaid}
-                            color="red"
+                            label="Avg/Firmă"
+                            value={`${(financialData.totalRevenue / financialData.companies.length).toFixed(2)} RON`}
+                            color="cyan"
                           />
                         </div>
                       </div>
@@ -588,104 +602,150 @@ export default function Home() {
                 {/* Financial Data Tab */}
                 {activeTab === 'financial' && financialData && (
                   <div className="space-y-8">
-                    {/* Financial Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                      <MetricCard
-                        icon={DollarSign}
-                        label="Venituri"
-                        value={`${financialData.totalRevenue.toFixed(2)} RON`}
-                        color="green"
-                      />
-                      <MetricCard
-                        icon={FileText}
-                        label="Creanțe"
-                        value={`${financialData.unpaidAmount.toFixed(2)} RON`}
-                        color="orange"
-                      />
-                      <MetricCard
-                        icon={FileText}
-                        label="Total Facturi"
-                        value={financialData.invoiceCount}
-                        color="blue"
-                      />
-                      <MetricCard
-                        icon={BarChart3}
-                        label="Incasate"
-                        value={financialData.invoicesPaid}
-                        color="lime"
-                      />
-                      <MetricCard
-                        icon={Activity}
-                        label="Neîncasate"
-                        value={financialData.invoicesUnpaid}
-                        color="red"
-                      />
-                    </div>
-
-                    {/* Financial Details */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      {/* Revenue Summary */}
-                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-900 mb-6">Rezumat Venituri</h3>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-                            <span className="text-slate-600">Venituri Incasate:</span>
-                            <span className="text-2xl font-bold text-green-600">
-                              {financialData.totalRevenue.toFixed(2)} RON
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-                            <span className="text-slate-600">Creanțe (Neîncasate):</span>
-                            <span className="text-2xl font-bold text-orange-600">
-                              {financialData.unpaidAmount.toFixed(2)} RON
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-600">Total Potențial:</span>
-                            <span className="text-2xl font-bold text-blue-600">
-                              {(financialData.totalRevenue + financialData.unpaidAmount).toFixed(2)} RON
-                            </span>
-                          </div>
+                    {/* Consolidated Summary */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-8 border border-blue-200">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="text-center">
+                          <p className="text-slate-600 font-semibold mb-2">Total Venituri Consolidate</p>
+                          <p className="text-4xl font-bold text-green-600">
+                            {financialData.totalRevenue.toFixed(2)} RON
+                          </p>
+                        </div>
+                        <div className="text-center border-l border-r border-slate-300">
+                          <p className="text-slate-600 font-semibold mb-2">Total Creanțe</p>
+                          <p className="text-4xl font-bold text-orange-600">
+                            {financialData.totalUnpaidAmount.toFixed(2)} RON
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-slate-600 font-semibold mb-2">Total Potențial</p>
+                          <p className="text-4xl font-bold text-blue-600">
+                            {(financialData.totalRevenue + financialData.totalUnpaidAmount).toFixed(2)} RON
+                          </p>
                         </div>
                       </div>
+                      <p className="text-sm text-slate-600 mt-6 text-center">
+                        Pentru perioada: {financialData.dateRange.from} - {financialData.dateRange.to}
+                      </p>
+                    </div>
 
-                      {/* Invoice Statistics */}
-                      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-900 mb-6">Statistici Facturi</h3>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-                            <span className="text-slate-600">Total Facturi:</span>
-                            <span className="text-2xl font-bold text-slate-900">
-                              {financialData.invoiceCount}
-                            </span>
+                    {/* Companies Breakdown */}
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-900 mb-6">Detalii pe Firme</h2>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {financialData.companies.map((company, idx) => (
+                          <div
+                            key={company.cif}
+                            className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow"
+                          >
+                            <div className="mb-4">
+                              <h3 className="text-lg font-bold text-slate-900">{company.companyName}</h3>
+                              <p className="text-sm text-slate-500">CIF: {company.cif}</p>
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="bg-green-50 rounded-lg p-4">
+                                <p className="text-xs text-slate-600 font-semibold uppercase">Venituri Incasate</p>
+                                <p className="text-2xl font-bold text-green-600 mt-1">
+                                  {company.totalRevenue.toFixed(2)} RON
+                                </p>
+                              </div>
+
+                              <div className="bg-orange-50 rounded-lg p-4">
+                                <p className="text-xs text-slate-600 font-semibold uppercase">Creanțe</p>
+                                <p className="text-2xl font-bold text-orange-600 mt-1">
+                                  {company.unpaidAmount.toFixed(2)} RON
+                                </p>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-blue-50 rounded-lg p-3">
+                                  <p className="text-xs text-slate-600 font-semibold">Total Facturi</p>
+                                  <p className="text-xl font-bold text-blue-600 mt-1">{company.invoiceCount}</p>
+                                </div>
+                                <div className="bg-slate-50 rounded-lg p-3">
+                                  <p className="text-xs text-slate-600 font-semibold">Medie/Factură</p>
+                                  <p className="text-xl font-bold text-slate-900 mt-1">
+                                    {company.averageInvoiceValue.toFixed(0)} RON
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="border-t border-slate-200 pt-4">
+                                <div className="flex justify-between text-sm mb-2">
+                                  <span className="text-green-700 font-semibold">Incasate: {company.invoicesPaid}</span>
+                                  <span className="text-orange-700 font-semibold">Neîncasate: {company.invoicesUnpaid}</span>
+                                </div>
+                                <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                  <div
+                                    className="bg-green-600 h-full"
+                                    style={{
+                                      width: `${company.invoiceCount > 0 ? (company.invoicesPaid / company.invoiceCount) * 100 : 0}%`,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-                            <span className="text-slate-600">Facturi Incasate:</span>
-                            <span className="text-2xl font-bold text-green-600">
-                              {financialData.invoicesPaid}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-600">Facturi În Așteptare:</span>
-                            <span className="text-2xl font-bold text-orange-600">
-                              {financialData.invoicesUnpaid}
-                            </span>
-                          </div>
-                        </div>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Average Invoice */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-                      <div className="text-center">
-                        <p className="text-slate-600 font-semibold mb-2">Valoare Medie pe Factură</p>
-                        <p className="text-5xl font-bold text-blue-600">
-                          {financialData.averageInvoiceValue.toFixed(2)} RON
-                        </p>
-                        <p className="text-sm text-slate-600 mt-2">
-                          Pentru perioada: {financialData.dateRange.from} - {financialData.dateRange.to}
-                        </p>
-                      </div>
+                    {/* Comparison Chart */}
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                      <h3 className="text-lg font-bold text-slate-900 mb-6">Comparație Venituri între Firme</h3>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <BarChart
+                          data={financialData.companies.map((c) => ({
+                            name: c.companyName,
+                            venituri: c.totalRevenue,
+                            creanțe: c.unpaidAmount,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="name" stroke="#64748b" />
+                          <YAxis stroke="#64748b" />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: '#1e293b',
+                              border: 'none',
+                              borderRadius: '8px',
+                              color: '#f1f5f9',
+                            }}
+                            formatter={formatRON}
+                          />
+                          <Bar dataKey="venituri" fill="#10b981" name="Venituri Incasate" />
+                          <Bar dataKey="creanțe" fill="#f59e0b" name="Creanțe" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Invoice Count Comparison */}
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                      <h3 className="text-lg font-bold text-slate-900 mb-6">Facturi - Comparație Firme</h3>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart
+                          data={financialData.companies.map((c) => ({
+                            name: c.companyName,
+                            incasate: c.invoicesPaid,
+                            neincasate: c.invoicesUnpaid,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="name" stroke="#64748b" />
+                          <YAxis stroke="#64748b" />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: '#1e293b',
+                              border: 'none',
+                              borderRadius: '8px',
+                              color: '#f1f5f9',
+                            }}
+                          />
+                          <Bar dataKey="incasate" fill="#3b82f6" name="Facturi Incasate" />
+                          <Bar dataKey="neincasate" fill="#ef4444" name="Facturi Neîncasate" />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
                 )}

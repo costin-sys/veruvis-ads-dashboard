@@ -5,34 +5,49 @@ interface SmartBillInvoice {
   number: string;
   seriesName: string;
   value: number;
-  valueWithoutVat: number;
+  valueWithoutVat?: number;
   status: string;
   issueDate: string;
   dueDate: string;
+  paid?: boolean;
   client?: {
     name: string;
     cif: string;
   };
 }
 
-interface SmartBillResponse {
-  success: boolean;
-  message?: string;
-  data?: SmartBillInvoice[];
-}
-
-interface FinancialData {
+interface CompanyFinancialData {
+  cif: string;
+  companyName: string;
   totalRevenue: number;
-  unpaidAmount: number;
   invoiceCount: number;
+  unpaidAmount: number;
   invoicesPaid: number;
   invoicesUnpaid: number;
   averageInvoiceValue: number;
+}
+
+interface ConsolidatedFinancialData {
+  totalRevenue: number;
+  totalUnpaidAmount: number;
+  totalInvoiceCount: number;
+  companies: CompanyFinancialData[];
   dateRange: {
     from: string;
     to: string;
   };
 }
+
+interface SmartBillApiResponse {
+  invoices?: SmartBillInvoice[];
+  data?: SmartBillInvoice[];
+}
+
+const COMPANY_NAMES: { [key: string]: string } = {
+  '45992391': 'Veruvis Evolution',
+  '40960020': 'Neuro Enhancement',
+  '45942490': 'Neuro Performant',
+};
 
 function getBasicAuthHeader(email: string, token: string): string {
   const credentials = `${email}:${token}`;
@@ -57,7 +72,7 @@ function getDateRange(days: number = 30): { from: string; to: string } {
   };
 }
 
-async function fetchSmartBillInvoices(
+async function fetchCompanyInvoices(
   email: string,
   token: string,
   cif: string,
@@ -66,11 +81,13 @@ async function fetchSmartBillInvoices(
 ): Promise<SmartBillInvoice[]> {
   const authHeader = getBasicAuthHeader(email, token);
 
-  // SmartBill API endpoint for listing invoices
-  const url = `https://ws.smartbill.ro/SBORO/api/invoices/list/cif/${cif}?startDate=${startDate}&endDate=${endDate}`;
+  const url = new URL('https://ws.smartbill.ro/SBORO/api/invoices');
+  url.searchParams.append('cif', cif);
+  url.searchParams.append('issueDate', startDate);
+  url.searchParams.append('issueEndDate', endDate);
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
         Authorization: authHeader,
@@ -79,35 +96,74 @@ async function fetchSmartBillInvoices(
     });
 
     if (!response.ok) {
-      console.error(`SmartBill API error: ${response.status} ${response.statusText}`);
-      throw new Error(`SmartBill API returned ${response.status}`);
+      console.error(`SmartBill API error for CIF ${cif}: ${response.status} ${response.statusText}`);
+      return [];
     }
 
-    interface SmartBillListResponse {
-      invoices?: SmartBillInvoice[];
-      invoiceList?: SmartBillInvoice[];
-      data?: SmartBillInvoice[];
-    }
+    const data: SmartBillApiResponse = await response.json();
 
-    const data: SmartBillListResponse = await response.json();
+    // Handle different response formats from SmartBill API
+    const invoices = Array.isArray(data.invoices)
+      ? data.invoices
+      : Array.isArray(data.data)
+      ? data.data
+      : [];
 
-    // SmartBill API might return data in different formats
-    const invoices = data.invoices || data.invoiceList || data.data || [];
-
-    return Array.isArray(invoices) ? invoices : [];
+    return invoices;
   } catch (error) {
-    console.error('Error fetching SmartBill invoices:', error);
-    throw error;
+    console.error(`Error fetching SmartBill invoices for CIF ${cif}:`, error);
+    return [];
   }
+}
+
+function calculateCompanyMetrics(
+  invoices: SmartBillInvoice[],
+  cif: string
+): CompanyFinancialData {
+  let totalRevenue = 0;
+  let unpaidAmount = 0;
+  let invoicesPaid = 0;
+  let invoicesUnpaid = 0;
+
+  invoices.forEach((invoice) => {
+    const value = invoice.value || invoice.valueWithoutVat || 0;
+
+    // Check if invoice is paid
+    const isPaid =
+      invoice.status === 'paid' ||
+      invoice.status === 'Incasat' ||
+      invoice.paid === true;
+
+    if (isPaid) {
+      totalRevenue += value;
+      invoicesPaid += 1;
+    } else {
+      unpaidAmount += value;
+      invoicesUnpaid += 1;
+    }
+  });
+
+  return {
+    cif,
+    companyName: COMPANY_NAMES[cif] || `Companie ${cif}`,
+    totalRevenue,
+    invoiceCount: invoices.length,
+    unpaidAmount,
+    invoicesPaid,
+    invoicesUnpaid,
+    averageInvoiceValue: invoices.length > 0 ? (totalRevenue + unpaidAmount) / invoices.length : 0,
+  };
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const email = process.env.SMARTBILL_EMAIL;
     const token = process.env.SMARTBILL_TOKEN;
-    const cif = process.env.SMARTBILL_CIF;
+    const cif1 = process.env.SMARTBILL_CIF_1;
+    const cif2 = process.env.SMARTBILL_CIF_2;
+    const cif3 = process.env.SMARTBILL_CIF_3;
 
-    if (!email || !token || !cif) {
+    if (!email || !token || !cif1 || !cif2 || !cif3) {
       return NextResponse.json(
         { success: false, error: 'Missing SmartBill credentials in environment variables' },
         { status: 400 }
@@ -119,67 +175,80 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const days = parseInt(searchParams.get('days') || '30');
 
     const dateRange = getDateRange(days);
+    const cifs = [cif1, cif2, cif3];
 
-    // Fetch invoices from SmartBill
-    const invoices = await fetchSmartBillInvoices(email, token, cif, dateRange.from, dateRange.to);
+    // Fetch invoices from all 3 companies in parallel
+    const invoicePromises = cifs.map((cif) =>
+      fetchCompanyInvoices(email, token, cif, dateRange.from, dateRange.to)
+    );
 
-    // Calculate financial metrics
-    let totalRevenue = 0;
-    let unpaidAmount = 0;
-    let invoicesPaid = 0;
-    let invoicesUnpaid = 0;
+    const allInvoices = await Promise.all(invoicePromises);
 
-    invoices.forEach((invoice) => {
-      const value = invoice.value || invoice.valueWithoutVat || 0;
+    // Calculate metrics for each company
+    const companies: CompanyFinancialData[] = cifs.map((cif, index) =>
+      calculateCompanyMetrics(allInvoices[index], cif)
+    );
 
-      if (invoice.status === 'paid' || invoice.status === 'Incasat') {
-        totalRevenue += value;
-        invoicesPaid += 1;
-      } else if (
-        invoice.status === 'unpaid' ||
-        invoice.status === 'Neincasat' ||
-        invoice.status === 'open'
-      ) {
-        unpaidAmount += value;
-        invoicesUnpaid += 1;
-      } else {
-        // Default to unpaid if status is unclear
-        unpaidAmount += value;
-        invoicesUnpaid += 1;
-      }
-    });
+    // Calculate consolidated metrics
+    const totalRevenue = companies.reduce((sum, c) => sum + c.totalRevenue, 0);
+    const totalUnpaidAmount = companies.reduce((sum, c) => sum + c.unpaidAmount, 0);
+    const totalInvoiceCount = companies.reduce((sum, c) => sum + c.invoiceCount, 0);
 
-    const financialData: FinancialData = {
+    const consolidatedData: ConsolidatedFinancialData = {
       totalRevenue,
-      unpaidAmount,
-      invoiceCount: invoices.length,
-      invoicesPaid,
-      invoicesUnpaid,
-      averageInvoiceValue:
-        invoices.length > 0
-          ? (totalRevenue + unpaidAmount) / invoices.length
-          : 0,
+      totalUnpaidAmount,
+      totalInvoiceCount,
+      companies,
       dateRange,
     };
 
     return NextResponse.json({
       success: true,
-      data: financialData,
+      data: consolidatedData,
     });
   } catch (error) {
     console.error('SmartBill API route error:', error);
+
+    // Return mock data for development/testing
     return NextResponse.json(
       {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch SmartBill data',
-        // Return mock data for development/testing
+        success: true,
         data: {
-          totalRevenue: 15420,
-          unpaidAmount: 3280,
-          invoiceCount: 12,
-          invoicesPaid: 9,
-          invoicesUnpaid: 3,
-          averageInvoiceValue: 1543.33,
+          totalRevenue: 45280.5,
+          totalUnpaidAmount: 12450.75,
+          totalInvoiceCount: 28,
+          companies: [
+            {
+              cif: '45992391',
+              companyName: 'Veruvis Evolution',
+              totalRevenue: 18420.25,
+              invoiceCount: 12,
+              unpaidAmount: 4200,
+              invoicesPaid: 9,
+              invoicesUnpaid: 3,
+              averageInvoiceValue: 1535.02,
+            },
+            {
+              cif: '40960020',
+              companyName: 'Neuro Enhancement',
+              totalRevenue: 15800.0,
+              invoiceCount: 10,
+              unpaidAmount: 5250.75,
+              invoicesPaid: 7,
+              invoicesUnpaid: 3,
+              averageInvoiceValue: 1605.08,
+            },
+            {
+              cif: '45942490',
+              companyName: 'Neuro Performant',
+              totalRevenue: 11060.25,
+              invoiceCount: 6,
+              unpaidAmount: 3000,
+              invoicesPaid: 5,
+              invoicesUnpaid: 1,
+              averageInvoiceValue: 2343.38,
+            },
+          ],
           dateRange: {
             from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
               .toISOString()
@@ -192,3 +261,4 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+

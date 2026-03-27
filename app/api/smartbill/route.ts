@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { parseStringPromise } from 'xml2js';
 
 interface SmartBillInvoice {
   id: number;
@@ -45,8 +46,8 @@ interface SmartBillApiResponse {
 
 const COMPANY_NAMES: { [key: string]: string } = {
   '45992391': 'Veruvis Evolution',
-  '40960020': 'Neuro Enhancement',
-  '45942490': 'Neuro Performant',
+  'RO40960020': 'Neuro Enhancement',
+  'RO45942490': 'Neuro Performant',
 };
 
 function getBasicAuthHeader(email: string, token: string): string {
@@ -55,20 +56,22 @@ function getBasicAuthHeader(email: string, token: string): string {
   return `Basic ${encoded}`;
 }
 
-function getDateRange(days: number = 30): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
-
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
+function parseInvoiceFromXML(invoiceXml: any): SmartBillInvoice {
+  // Adjust based on actual XML structure
   return {
-    from: formatDate(from),
-    to: formatDate(to),
+    id: parseInt(invoiceXml.id?.[0] || '0'),
+    number: invoiceXml.number?.[0] || '',
+    seriesName: invoiceXml.seriesName?.[0] || '',
+    value: parseFloat(invoiceXml.value?.[0] || '0'),
+    valueWithoutVat: invoiceXml.valueWithoutVat?.[0] ? parseFloat(invoiceXml.valueWithoutVat[0]) : undefined,
+    status: invoiceXml.status?.[0] || '',
+    issueDate: invoiceXml.issueDate?.[0] || '',
+    dueDate: invoiceXml.dueDate?.[0] || '',
+    paid: invoiceXml.paid?.[0] === 'true',
+    client: {
+      name: invoiceXml.client?.[0]?.name?.[0] || '',
+      cif: invoiceXml.client?.[0]?.cif?.[0] || '',
+    },
   };
 }
 
@@ -81,8 +84,12 @@ async function fetchCompanyInvoices(
 ): Promise<SmartBillInvoice[]> {
   const authHeader = getBasicAuthHeader(email, token);
 
-  const url = new URL('https://ws.smartbill.ro/SBORO/api/invoices');
+  const url = new URL('https://ws.smartbill.ro/SBORO/api/invoice');
   url.searchParams.append('cif', cif);
+  url.searchParams.append('seriesname', '');
+  url.searchParams.append('number', '');
+  url.searchParams.append('clientCif', '');
+  url.searchParams.append('clientName', '');
   url.searchParams.append('issueDate', startDate);
   url.searchParams.append('issueEndDate', endDate);
 
@@ -91,7 +98,8 @@ async function fetchCompanyInvoices(
       method: 'GET',
       headers: {
         Authorization: authHeader,
-        'Content-Type': 'application/json',
+        'Accept': 'application/xml',
+        'Content-Type': 'application/xml',
       },
     });
 
@@ -100,14 +108,13 @@ async function fetchCompanyInvoices(
       return [];
     }
 
-    const data: SmartBillApiResponse = await response.json();
+    const xmlText = await response.text();
+    const result = await parseStringPromise(xmlText);
 
-    // Handle different response formats from SmartBill API
-    const invoices = Array.isArray(data.invoices)
-      ? data.invoices
-      : Array.isArray(data.data)
-      ? data.data
-      : [];
+    // Assuming the XML structure has invoices under result.invoices.invoice or similar
+    // Adjust based on actual XML structure
+    const invoices = result.invoices?.invoice || result.invoice || [];
+    return Array.isArray(invoices) ? invoices.map(parseInvoiceFromXML) : [parseInvoiceFromXML(invoices)];
 
     return invoices;
   } catch (error) {
@@ -162,8 +169,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const cif1 = process.env.SMARTBILL_CIF_1;
     const cif2 = process.env.SMARTBILL_CIF_2;
     const cif3 = process.env.SMARTBILL_CIF_3;
+    const cif4 = process.env.SMARTBILL_CIF_4;
+    const cif5 = process.env.SMARTBILL_CIF_5;
+    const cif6 = process.env.SMARTBILL_CIF_6;
 
-    if (!email || !token || !cif1 || !cif2 || !cif3) {
+    if (!email || !token || !cif1 || !cif2 || !cif3 || !cif4 || !cif5 || !cif6) {
       return NextResponse.json(
         { success: false, error: 'Missing SmartBill credentials in environment variables' },
         { status: 400 }
@@ -175,19 +185,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const days = parseInt(searchParams.get('days') || '30');
 
     const dateRange = getDateRange(days);
-    const cifs = [cif1, cif2, cif3];
 
-    // Fetch invoices from all 3 companies in parallel
-    const invoicePromises = cifs.map((cif) =>
-      fetchCompanyInvoices(email, token, cif, dateRange.from, dateRange.to)
-    );
+    const companyConfigs = [
+      { name: 'Veruvis Evolution', baseCif: '45992391', cifs: [cif1, cif2, cif3] },
+      { name: 'Neuro Enhancement', baseCif: 'RO40960020', cifs: [cif4] },
+      { name: 'Neuro Performant', baseCif: 'RO45942490', cifs: [cif5, cif6] },
+    ];
 
-    const allInvoices = await Promise.all(invoicePromises);
-
-    // Calculate metrics for each company
-    const companies: CompanyFinancialData[] = cifs.map((cif, index) =>
-      calculateCompanyMetrics(allInvoices[index], cif)
-    );
+    // Fetch invoices for each company group
+    const companies: CompanyFinancialData[] = [];
+    for (const config of companyConfigs) {
+      const invoicePromises = config.cifs.map((cif) =>
+        fetchCompanyInvoices(email, token, cif, dateRange.from, dateRange.to)
+      );
+      const allInvoicesForCompany = await Promise.all(invoicePromises);
+      const combinedInvoices = allInvoicesForCompany.flat();
+      companies.push(calculateCompanyMetrics(combinedInvoices, config.baseCif));
+    }
 
     // Calculate consolidated metrics
     const totalRevenue = companies.reduce((sum, c) => sum + c.totalRevenue, 0);
@@ -229,7 +243,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
               averageInvoiceValue: 1535.02,
             },
             {
-              cif: '40960020',
+              cif: 'RO40960020',
               companyName: 'Neuro Enhancement',
               totalRevenue: 15800.0,
               invoiceCount: 10,
@@ -239,7 +253,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
               averageInvoiceValue: 1605.08,
             },
             {
-              cif: '45942490',
+              cif: 'RO45942490',
               companyName: 'Neuro Performant',
               totalRevenue: 11060.25,
               invoiceCount: 6,

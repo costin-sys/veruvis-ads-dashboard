@@ -102,7 +102,32 @@ export default function Home() {
   const [financialError, setFinancialError] = useState<string | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
+  const [analysisSectionBlocks, setAnalysisSectionBlocks] = useState<Array<{icon: string; title: string; text: string}>>([]);
+  const [showAnalysisPanel, setShowAnalysisPanel] = useState(false);
   const [agencyGuide, setAgencyGuide] = useState<string | null>(null);
+
+  const parseAnalysisSections = (text: string) => {
+    const lines = text.split('\n');
+    const blocks: Array<{icon: string; title: string; text: string}> = [];
+    let current = {icon: '📋', title: 'Rezumat AI', text: ''};
+    const sectionRegex = /^\s*([✅⚠️📋]+)\s*(.*)$/;
+
+    for (const line of lines) {
+      const match = sectionRegex.exec(line);
+      if (match) {
+        if (current.text.trim().length > 0) {
+          blocks.push({ ...current, text: current.text.trim() });
+        }
+        current = { icon: match[1], title: match[2] || 'Secțiune', text: '' };
+      } else {
+        current.text += (current.text ? '\n' : '') + line;
+      }
+    }
+    if (current.text.trim().length > 0 || blocks.length === 0) {
+      blocks.push({ ...current, text: current.text.trim() });
+    }
+    return blocks;
+  };
 
   const formatRON = (value: any) => {
     if (typeof value === 'number') {
@@ -202,6 +227,8 @@ export default function Home() {
         console.log('Analysis successful');
         setAnalysis(result.analysis);
         setAgencyGuide(result.agencyGuide);
+        setAnalysisSectionBlocks(parseAnalysisSections(result.analysis || ''));
+        setShowAnalysisPanel(true);
       } else {
         const errorMsg = result.error || `API returned status ${response.status}`;
         console.error('Analysis failed:', errorMsg);
@@ -287,25 +314,82 @@ export default function Home() {
                       </button>
                     </div>
 
-                    {/* Analysis Report */}
+                    {/* Analysis hint */}
                     {analysis && (
-                      <div className="mb-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-8 border border-blue-200 shadow-lg">
-                        <h3 className="text-lg font-bold text-slate-900 mb-4">📊 Analiza datelor</h3>
-                        <div className="prose prose-sm max-w-none text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
-                          {analysis}
-                        </div>
+                      <div className="mb-4 text-sm text-slate-700">
+                        AI răspuns disponibil. Apasă butonul de mai jos pentru a vizualiza în panoul din dreapta.
                       </div>
                     )}
 
-                    {/* Agency Guide Report */}
-                    {agencyGuide && (
-                      <div className="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-8 border border-amber-300 shadow-lg">
-                        <h3 className="text-lg font-bold text-amber-900 mb-4">📋 Ce să ceri agenției</h3>
-                        <div className="prose prose-sm max-w-none text-amber-900 whitespace-pre-wrap font-sans leading-relaxed">
-                          {agencyGuide}
+                    {/* Meniu: deschidere panel */}
+                    {analysis && (
+                      <button
+                        onClick={() => setShowAnalysisPanel(true)}
+                        className="mb-8 px-4 py-2 border border-blue-300 text-blue-700 rounded-lg bg-blue-50 hover:bg-blue-100 transition"
+                      >
+                        Deschide analiza AI
+                      </button>
+                    )}
+
+                    {/* Analysis Slide-in Panel */}
+                    <div
+                      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-all duration-300 ease-out ${
+                        showAnalysisPanel ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+                      }`}
+                    >
+                      <div
+                        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+                        onClick={() => setShowAnalysisPanel(false)}
+                      />
+                      <div
+                        className={`relative h-full w-full max-w-[600px] bg-white shadow-2xl border-l border-slate-200 transform bg-gradient-to-br from-white to-slate-50 p-6 overflow-y-auto transition-transform duration-300 ease-out ${
+                          showAnalysisPanel ? 'translate-x-0' : 'translate-x-full'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl font-bold text-slate-900">🔍 Analiză AI</h3>
+                            <p className="text-xs text-slate-500">Rezultate cleare, secțiuni separate și vizual rafinat.</p>
+                          </div>
+                          <button
+                            onClick={() => setShowAnalysisPanel(false)}
+                            aria-label="Închide"
+                            className="text-slate-500 hover:text-slate-900 rounded-full p-2 transition"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="space-y-4 max-w-[600px] text-sm text-slate-800">
+                          {analysisSectionBlocks.length === 0 && analysis && (
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
+                              <pre className="whitespace-pre-wrap break-words font-sans text-sm">{analysis}</pre>
+                            </div>
+                          )}
+
+                          {analysisSectionBlocks.map((section, idx) => {
+                            const base =
+                              section.icon.includes('✅')
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                : section.icon.includes('⚠️')
+                                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                                : 'bg-blue-50 border-blue-200 text-blue-900';
+
+                            return (
+                              <div key={`${section.title}-${idx}`} className={`rounded-xl border p-4 ${base}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-2 text-sm font-semibold">
+                                    <span>{section.icon}</span>
+                                    <span>{section.title || 'Secțiune'}</span>
+                                  </div>
+                                </div>
+                                <p className="mt-2 whitespace-pre-wrap leading-relaxed text-sm font-sans">{section.text}</p>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
+                    </div>
                   </>
                 )}
 

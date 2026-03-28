@@ -1,5 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parseStringPromise } from 'xml2js';
+
+// Parser XML stack-based, compatibil cu formatul xml2js (valori ca array-uri)
+function parseXml(xmlText: string): Record<string, any> {
+  interface Frame { tag: string; obj: Record<string, any>; text: string }
+  const root: Record<string, any> = {};
+  const stack: Frame[] = [];
+  const tokenRe = /<\?[^>]*>|<!--[\s\S]*?-->|<\/([a-zA-Z][a-zA-Z0-9_:-]*)>|<([a-zA-Z][a-zA-Z0-9_:-]*)[^>]*\/>|<([a-zA-Z][a-zA-Z0-9_:-]*)[^>]*>|([^<]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(xmlText)) !== null) {
+    const [, closeTag, selfClose, openTag, text] = m;
+    if (openTag) {
+      stack.push({ tag: openTag, obj: {}, text: '' });
+    } else if (selfClose) {
+      const parent = stack.length > 0 ? stack[stack.length - 1].obj : root;
+      if (!parent[selfClose]) parent[selfClose] = [''];
+      else (parent[selfClose] as any[]).push('');
+    } else if (closeTag) {
+      const frame = stack.pop();
+      if (!frame) continue;
+      const value: Record<string, any> | string =
+        Object.keys(frame.obj).length > 0 ? frame.obj : frame.text.trim();
+      const parent = stack.length > 0 ? stack[stack.length - 1].obj : root;
+      if (parent[frame.tag] === undefined) parent[frame.tag] = [value];
+      else (parent[frame.tag] as any[]).push(value);
+    } else if (text) {
+      const trimmed = text.trim();
+      if (trimmed && stack.length > 0) stack[stack.length - 1].text += trimmed;
+    }
+  }
+  return root;
+}
 
 interface SmartBillInvoice {
   id: number;
@@ -109,7 +139,7 @@ async function fetchCompanyInvoices(
     }
 
     const xmlText = await response.text();
-    const result = await parseStringPromise(xmlText);
+    const result = parseXml(xmlText);
 
     // Assuming the XML structure has invoices under result.invoices.invoice or similar
     // Adjust based on actual XML structure

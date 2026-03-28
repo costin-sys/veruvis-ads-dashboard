@@ -1,19 +1,28 @@
 'use client';
 
-import { BarChart3, TrendingUp, Zap, Brain, DollarSign } from 'lucide-react';
+import { BarChart3, TrendingUp, Zap, Brain, DollarSign, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+
+interface TokenStatus {
+  valid: boolean;
+  daysUntilExpiry: number | null;
+  needsRefresh: boolean;
+  isExpired: boolean;
+}
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  metaTokenStatus?: TokenStatus | null;
 }
 
-export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, metaTokenStatus }: SidebarProps) {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'ga4', label: 'GA4 Analytics', icon: TrendingUp },
     { id: 'meta', label: 'Meta Ads', icon: Zap },
     { id: 'financial', label: 'Date Financiare', icon: DollarSign },
+    { id: 'ai-analysis', label: 'Analizează cu AI', icon: Sparkles },
   ];
 
   const assistantItems = [
@@ -44,13 +53,33 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
               key={item.id}
               onClick={() => onTabChange(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                isActive
+                isActive && item.id === 'ai-analysis'
+                  ? 'bg-indigo-600 text-white shadow-lg'
+                  : isActive
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
               }`}
             >
               <IconComponent className="h-5 w-5" />
-              <span className="font-medium">{item.label}</span>
+              <span className="font-medium flex-1 text-left">{item.label}</span>
+              {item.id === 'meta' && metaTokenStatus && (
+                <span
+                  title={
+                    metaTokenStatus.isExpired
+                      ? 'Token expirat!'
+                      : metaTokenStatus.needsRefresh
+                      ? `Token expiră în ${metaTokenStatus.daysUntilExpiry} zile`
+                      : `Token valid — ${metaTokenStatus.daysUntilExpiry ?? '?'} zile`
+                  }
+                  className={`h-2 w-2 rounded-full flex-shrink-0 ${
+                    metaTokenStatus.isExpired || !metaTokenStatus.valid
+                      ? 'bg-red-400'
+                      : metaTokenStatus.needsRefresh
+                      ? 'bg-yellow-400 animate-pulse'
+                      : 'bg-green-400'
+                  }`}
+                />
+              )}
             </button>
           );
         })}

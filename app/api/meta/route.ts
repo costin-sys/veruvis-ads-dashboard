@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
+import { getActiveToken, checkTokenStatus, refreshAccessToken } from '@/app/lib/meta-token';
 
-const accessToken = process.env.META_ACCESS_TOKEN;
 const adAccountId = 'act_758453352613130';
 
-async function fetchMetaData(endpoint: string, fields: string) {
-  const url = `https://graph.facebook.com/v19.0/${adAccountId}/${endpoint}?fields=${fields}&access_token=${accessToken}`;
+async function fetchMetaData(endpoint: string, fields: string, token: string) {
+  const url = `https://graph.facebook.com/v21.0/${adAccountId}/${endpoint}?fields=${fields}&access_token=${token}`;
 
   console.log(`Fetching Meta data: ${endpoint}`);
 
@@ -25,8 +25,22 @@ export async function GET(request: Request) {
 
     console.log('Meta API called for ad account:', adAccountId, '- days:', days);
 
+    let accessToken = getActiveToken();
     if (!accessToken) {
-      throw new Error('META_ACCESS_TOKEN environment variable is not set');
+      throw new Error('META_ACCESS_TOKEN nu este setat.');
+    }
+
+    // Auto-refresh dacă tokenul expiră în mai puțin de 7 zile
+    try {
+      const status = await checkTokenStatus();
+      if (status.needsRefresh && !status.isExpired) {
+        console.log('[meta] Token expiră în curând, se reînnoiește automat...');
+        const refreshed = await refreshAccessToken();
+        accessToken = refreshed.newToken;
+        console.log('[meta] Token reînnoit automat cu succes.');
+      }
+    } catch (refreshErr) {
+      console.warn('[meta] Auto-refresh eșuat, se continuă cu tokenul curent:', refreshErr);
     }
 
     const now = new Date();
@@ -39,7 +53,7 @@ export async function GET(request: Request) {
 
     // Fetch account insights (spend, impressions, clicks, etc.)
     console.log('Fetching account insights...');
-    const insightsUrl = `https://graph.facebook.com/v19.0/${adAccountId}/insights?fields=spend,impressions,clicks,ctr,campaign_name&date_preset=last_30d&access_token=${accessToken}`;
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?fields=spend,impressions,clicks,ctr,campaign_name&date_preset=last_30d&access_token=${accessToken}`;
 
     const insightsResponse = await fetch(insightsUrl);
 
@@ -74,7 +88,7 @@ export async function GET(request: Request) {
 
     // Fetch active campaigns
     console.log('Fetching active campaigns...');
-    const campaignsUrl = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=id,name,status&effective_status[0]=ACTIVE&access_token=${accessToken}&limit=100`;
+    const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,status&effective_status[0]=ACTIVE&access_token=${accessToken}&limit=100`;
 
     const campaignsResponse = await fetch(campaignsUrl);
 
@@ -90,7 +104,7 @@ export async function GET(request: Request) {
 
     // Fetch campaign details for breakdown
     console.log('Fetching campaign performance...');
-    const campaignInsightsUrl = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=id,name,status,insights.fields(spend,impressions,clicks,ctr).date_preset(last_30d)&effective_status[0]=ACTIVE&access_token=${accessToken}&limit=10`;
+    const campaignInsightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,status,insights.fields(spend,impressions,clicks,ctr).date_preset(last_30d)&effective_status[0]=ACTIVE&access_token=${accessToken}&limit=10`;
 
     const campaignInsightsResponse = await fetch(campaignInsightsUrl);
 

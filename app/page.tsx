@@ -103,8 +103,21 @@ export default function Home() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analysisSectionBlocks, setAnalysisSectionBlocks] = useState<Array<{icon: string; title: string; text: string}>>([]);
-  const [showAnalysisPanel, setShowAnalysisPanel] = useState(false);
   const [agencyGuide, setAgencyGuide] = useState<string | null>(null);
+  const [metaTokenStatus, setMetaTokenStatus] = useState<{
+    valid: boolean;
+    daysUntilExpiry: number | null;
+    needsRefresh: boolean;
+    isExpired: boolean;
+    expiresAt: number | null;
+    source: string;
+  } | null>(null);
+  const [tokenRefreshing, setTokenRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState<{
+    newToken: string;
+    expiresDate: string;
+    daysUntilExpiry: number;
+  } | null>(null);
 
   const parseAnalysisSections = (text: string) => {
     const lines = text.split('\n');
@@ -176,6 +189,38 @@ export default function Home() {
     fetchAllData();
   }, [days]);
 
+  // Fetch token status o singură dată la mount
+  useEffect(() => {
+    fetch('/api/meta/token-status')
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setMetaTokenStatus(d); })
+      .catch(() => {});
+  }, []);
+
+  const handleRefreshToken = async () => {
+    setTokenRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const res = await fetch('/api/meta/refresh-token', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        setRefreshResult({
+          newToken: json.newToken,
+          expiresDate: json.expiresDate,
+          daysUntilExpiry: json.daysUntilExpiry,
+        });
+        // Actualizăm statusul tokenului local
+        setMetaTokenStatus((prev) => prev ? { ...prev, needsRefresh: false, isExpired: false, valid: true, daysUntilExpiry: json.daysUntilExpiry } : prev);
+      } else {
+        alert(`Eroare refresh token: ${json.error}`);
+      }
+    } catch {
+      alert('Eroare la reînnoirea tokenului.');
+    } finally {
+      setTokenRefreshing(false);
+    }
+  };
+
   const handleAnalyze = async () => {
     console.log('Handle analyze called');
     console.log('Data available:', { data, metaData });
@@ -228,7 +273,6 @@ export default function Home() {
         setAnalysis(result.analysis);
         setAgencyGuide(result.agencyGuide);
         setAnalysisSectionBlocks(parseAnalysisSections(result.analysis || ''));
-        setShowAnalysisPanel(true);
       } else {
         const errorMsg = result.error || `API returned status ${response.status}`;
         console.error('Analysis failed:', errorMsg);
@@ -251,6 +295,8 @@ export default function Home() {
         return 'Meta Ads Performance';
       case 'financial':
         return 'Date Financiare';
+      case 'ai-analysis':
+        return 'Analizează cu AI';
       default:
         return 'Dashboard Overview';
     }
@@ -259,7 +305,7 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-slate-100">
       {/* Sidebar */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} metaTokenStatus={metaTokenStatus} />
 
       {/* Main Content */}
       <div className="ml-60 flex-1 flex flex-col overflow-hidden">
@@ -278,119 +324,115 @@ export default function Home() {
               </div>
             ) : (
               <>
-                {/* Analysis Button and Report */}
-                {data && metaData && (
-                  <>
-                    {/* Error Alert */}
+                {/* AI Analysis Tab */}
+                {activeTab === 'ai-analysis' && (
+                  <div className="space-y-6">
+                    {/* Hero Card */}
+                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white shadow-lg">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Sparkles className="h-7 w-7" />
+                        <h2 className="text-2xl font-bold">Analizează date cu AI</h2>
+                      </div>
+                      <p className="text-indigo-100 mb-6 max-w-xl">
+                        Claude analizează datele tale din GA4 și Meta Ads și generează insights acționabile
+                        și recomandări concrete pentru echipa de marketing.
+                      </p>
+                      {data && metaData ? (
+                        <button
+                          onClick={handleAnalyze}
+                          disabled={analysisLoading}
+                          className="inline-flex items-center gap-2 px-6 py-3 bg-white text-indigo-700 font-semibold rounded-xl hover:bg-indigo-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                        >
+                          {analysisLoading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                              Claude analizează datele...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-5 w-5" />
+                              {analysis ? 'Regenerează analiza' : 'Pornește analiza'}
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <p className="text-indigo-200 text-sm">Se încarcă datele GA4 și Meta Ads...</p>
+                      )}
+                    </div>
+
+                    {/* Error from analysis */}
                     {error && (
-                      <div className="mb-8 bg-red-50 border border-red-300 rounded-lg p-4 text-red-800">
+                      <div className="bg-red-50 border border-red-300 rounded-xl p-4 text-red-800">
                         <div className="flex items-start gap-3">
-                          <div className="text-red-500 font-bold">⚠️</div>
+                          <span className="font-bold">⚠️</span>
                           <div>
-                            <h4 className="font-semibold">Error</h4>
+                            <h4 className="font-semibold">Eroare</h4>
                             <p className="text-sm">{error}</p>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    <div className="mb-8 flex justify-end">
-                      <button
-                        onClick={handleAnalyze}
-                        disabled={analysisLoading}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                      >
-                        {analysisLoading ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            Claude analizează datele...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="h-5 w-5" />
-                            Analizează datele cu AI
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Analysis hint */}
-                    {analysis && (
-                      <div className="mb-4 text-sm text-slate-700">
-                        AI răspuns disponibil. Apasă butonul de mai jos pentru a vizualiza în panoul din dreapta.
+                    {/* Empty state */}
+                    {!analysis && !analysisLoading && (
+                      <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-50 mb-4">
+                          <Sparkles className="h-8 w-8 text-indigo-500" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">Nicio analiză încă</h3>
+                        <p className="text-slate-500 text-sm max-w-sm mx-auto">
+                          Apasă butonul de mai sus pentru a genera o analiză completă a datelor tale de marketing.
+                        </p>
                       </div>
                     )}
 
-                    {/* Meniu: deschidere panel */}
+                    {/* Analysis Results — Section 1 */}
                     {analysis && (
-                      <button
-                        onClick={() => setShowAnalysisPanel(true)}
-                        className="mb-8 px-4 py-2 border border-blue-300 text-blue-700 rounded-lg bg-blue-50 hover:bg-blue-100 transition"
-                      >
-                        Deschide analiza AI
-                      </button>
-                    )}
-
-                    {/* Analysis Slide-in Panel */}
-                    <div
-                      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-all duration-300 ease-out ${
-                        showAnalysisPanel ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-                      }`}
-                    >
-                      <div
-                        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-                        onClick={() => setShowAnalysisPanel(false)}
-                      />
-                      <div
-                        className={`relative h-full w-full max-w-[600px] bg-white shadow-2xl border-l border-slate-200 transform bg-gradient-to-br from-white to-slate-50 p-6 overflow-y-auto transition-transform duration-300 ease-out ${
-                          showAnalysisPanel ? 'translate-x-0' : 'translate-x-full'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <h3 className="text-xl font-bold text-slate-900">🔍 Analiză AI</h3>
-                            <p className="text-xs text-slate-500">Rezultate cleare, secțiuni separate și vizual rafinat.</p>
-                          </div>
-                          <button
-                            onClick={() => setShowAnalysisPanel(false)}
-                            aria-label="Închide"
-                            className="text-slate-500 hover:text-slate-900 rounded-full p-2 transition"
-                          >
-                            ✕
-                          </button>
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                          <h3 className="font-bold text-slate-900">📊 Analiza datelor</h3>
                         </div>
-
-                        <div className="space-y-4 max-w-[600px] text-sm text-slate-800">
-                          {analysisSectionBlocks.length === 0 && analysis && (
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
-                              <pre className="whitespace-pre-wrap break-words font-sans text-sm">{analysis}</pre>
-                            </div>
-                          )}
-
-                          {analysisSectionBlocks.map((section, idx) => {
-                            const base =
-                              section.icon.includes('✅')
+                        <div className="p-6 space-y-4">
+                          {analysisSectionBlocks.length === 0 ? (
+                            <pre className="whitespace-pre-wrap break-words font-sans text-sm text-slate-700 leading-relaxed">
+                              {analysis}
+                            </pre>
+                          ) : (
+                            analysisSectionBlocks.map((section, idx) => {
+                              const base = section.icon.includes('✅')
                                 ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                                 : section.icon.includes('⚠️')
                                 ? 'bg-amber-50 border-amber-200 text-amber-900'
                                 : 'bg-blue-50 border-blue-200 text-blue-900';
-
-                            return (
-                              <div key={`${section.title}-${idx}`} className={`rounded-xl border p-4 ${base}`}>
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex items-center gap-2 text-sm font-semibold">
+                              return (
+                                <div key={`${section.title}-${idx}`} className={`rounded-xl border p-4 ${base}`}>
+                                  <div className="flex items-center gap-2 text-sm font-semibold mb-2">
                                     <span>{section.icon}</span>
                                     <span>{section.title || 'Secțiune'}</span>
                                   </div>
+                                  <p className="whitespace-pre-wrap leading-relaxed text-sm font-sans">{section.text}</p>
                                 </div>
-                                <p className="mt-2 whitespace-pre-wrap leading-relaxed text-sm font-sans">{section.text}</p>
-                              </div>
-                            );
-                          })}
+                              );
+                            })
+                          )}
                         </div>
                       </div>
-                    </div>
-                  </>
+                    )}
+
+                    {/* Agency Guide — Section 2 */}
+                    {agencyGuide && (
+                      <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+                        <div className="px-6 py-4 border-b border-amber-100 bg-amber-50">
+                          <h3 className="font-bold text-amber-900">📋 Ghid pentru agenție</h3>
+                        </div>
+                        <div className="p-6">
+                          <pre className="whitespace-pre-wrap break-words font-sans text-sm text-slate-700 leading-relaxed">
+                            {agencyGuide}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Overview Tab */}
@@ -652,6 +694,75 @@ export default function Home() {
                 {/* Meta Ads Tab */}
                 {activeTab === 'meta' && metaData && (
                   <div className="space-y-8">
+
+                    {/* Token Status Card */}
+                    {metaTokenStatus && (
+                      <div className={`rounded-xl p-5 border flex flex-col sm:flex-row sm:items-center gap-4 ${
+                        metaTokenStatus.isExpired || !metaTokenStatus.valid
+                          ? 'bg-red-50 border-red-200'
+                          : metaTokenStatus.needsRefresh
+                          ? 'bg-yellow-50 border-yellow-300'
+                          : 'bg-green-50 border-green-200'
+                      }`}>
+                        <div className="flex items-center gap-3 flex-1">
+                          <span className={`text-2xl ${
+                            metaTokenStatus.isExpired ? '🔴' : metaTokenStatus.needsRefresh ? '🟡' : '🟢'
+                          }`}>
+                            {metaTokenStatus.isExpired ? '🔴' : metaTokenStatus.needsRefresh ? '⚠️' : '✅'}
+                          </span>
+                          <div>
+                            <p className="font-semibold text-slate-900 text-sm">
+                              {metaTokenStatus.isExpired
+                                ? 'Token Meta Ads expirat — datele nu se mai pot încărca'
+                                : metaTokenStatus.needsRefresh
+                                ? `Token expiră în ${metaTokenStatus.daysUntilExpiry} zile — reînnoire recomandată`
+                                : `Token valid — mai sunt ${metaTokenStatus.daysUntilExpiry ?? '?'} zile până la expirare`}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Sursă: {metaTokenStatus.source === 'file' ? 'fișier local (meta-token.json)' : 'variabilă de mediu (.env.local)'}
+                              {metaTokenStatus.expiresAt && ` · Expiră: ${new Date(metaTokenStatus.expiresAt * 1000).toLocaleDateString('ro-RO')}`}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleRefreshToken}
+                          disabled={tokenRefreshing}
+                          className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                        >
+                          {tokenRefreshing ? (
+                            <>
+                              <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full" />
+                              Se reînnoiește...
+                            </>
+                          ) : (
+                            '🔄 Reînnoiește tokenul'
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Refresh Result — afișăm noul token */}
+                    {refreshResult && (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+                        <p className="font-semibold text-blue-900 mb-2">✅ Token reînnoit cu succes!</p>
+                        <p className="text-xs text-blue-700 mb-3">
+                          Valabil până la: <strong>{refreshResult.expiresDate}</strong> ({refreshResult.daysUntilExpiry} zile)
+                        </p>
+                        <p className="text-xs text-slate-600 mb-2 font-medium">Copiază tokenul și actualizează <code className="bg-white px-1 py-0.5 rounded border">META_ACCESS_TOKEN</code> în Vercel → Settings → Environment Variables:</p>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 block bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs text-slate-800 break-all font-mono">
+                            {refreshResult.newToken}
+                          </code>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(refreshResult.newToken)}
+                            className="flex-shrink-0 px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition"
+                          >
+                            📋 Copiază
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Top Campaigns */}
                     <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
                       <h3 className="text-lg font-bold text-slate-900 mb-4">Top Campaigns</h3>

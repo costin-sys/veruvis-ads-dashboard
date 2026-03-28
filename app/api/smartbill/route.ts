@@ -162,6 +162,15 @@ function calculateCompanyMetrics(
   };
 }
 
+function getDateRange(days: number): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return {
+    from: from.toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0],
+  };
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const email = process.env.SMARTBILL_EMAIL;

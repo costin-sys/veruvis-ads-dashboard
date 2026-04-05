@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, TrendingUp, Zap, Brain, DollarSign, Sparkles } from 'lucide-react';
+import { BarChart3, TrendingUp, Zap, Brain, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 interface TokenStatus {
@@ -21,7 +21,6 @@ export function Sidebar({ activeTab, onTabChange, metaTokenStatus }: SidebarProp
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'ga4', label: 'GA4 Analytics', icon: TrendingUp },
     { id: 'meta', label: 'Meta Ads', icon: Zap },
-    { id: 'financial', label: 'Date Financiare', icon: DollarSign },
     { id: 'ai-analysis', label: 'Analizează cu AI', icon: Sparkles },
   ];
 
